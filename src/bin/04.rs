@@ -1,6 +1,6 @@
 advent_of_code::solution!(4);
 
-const DIRECTIONS: [(i16, i16); 8] = [
+const DIRECTIONS: [(isize, isize); 8] = [
     (-1, 0),
     (1, 0),
     (0, -1),
@@ -11,60 +11,57 @@ const DIRECTIONS: [(i16, i16); 8] = [
     (1, 1),
 ];
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 enum Cell {
     Roll,
     Empty,
 }
 
-impl Cell {
-    fn from_char(c: char) -> Self {
+impl TryFrom<char> for Cell {
+    type Error = char;
+
+    fn try_from(c: char) -> Result<Self, Self::Error> {
         match c {
-            '.' => Self::Empty,
-            '@' => Self::Roll,
-            other => panic!("Expected '.' or '@', got {}", other),
+            '.' => Ok(Self::Empty),
+            '@' => Ok(Self::Roll),
+            other => Err(other),
         }
     }
 }
 
 struct Grid {
     cells: Vec<Vec<Cell>>,
-    rows: usize,
-    cols: usize,
 }
 
 impl Grid {
     fn from_input(input: &str) -> Self {
         let cells: Vec<Vec<Cell>> = input
             .lines()
-            .map(|line| line.chars().map(Cell::from_char).collect::<Vec<Cell>>())
+            .map(|line| {
+                line.chars()
+                    .map(|c| Cell::try_from(c).expect("valid cell character"))
+                    .collect()
+            })
             .collect();
 
-        let rows = cells.len();
-        let cols = cells[0].len();
-
-        Self { cells, rows, cols }
+        Self { cells }
     }
 
-    // Assumes that the cell at (row, col) is a Roll, not Empty
+    fn get(&self, row: usize, col: usize) -> Option<&Cell> {
+        self.cells.get(row).and_then(|r| r.get(col))
+    }
+
+    fn neighbor(&self, row: usize, col: usize, dr: isize, dc: isize) -> Option<&Cell> {
+        let nrow = row.checked_add_signed(dr)?;
+        let ncol = col.checked_add_signed(dc)?;
+        self.get(nrow, ncol)
+    }
+
     fn can_forklift_access(&self, row: usize, col: usize) -> bool {
-        let adjacent_rolls: usize = DIRECTIONS
-            .map(|(dx, dy)| {
-                let nrow = row as i16 + dx;
-                let ncol = col as i16 + dy;
-                if nrow >= 0
-                    && ncol >= 0
-                    && nrow < self.rows as i16
-                    && ncol < self.cols as i16
-                    && self.cells[nrow as usize][ncol as usize] == Cell::Roll
-                {
-                    1
-                } else {
-                    0
-                }
-            })
+        let adjacent_rolls = DIRECTIONS
             .iter()
-            .sum();
+            .filter(|&&(dr, dc)| self.neighbor(row, col, dr, dc) == Some(&Cell::Roll))
+            .count();
 
         adjacent_rolls < 4
     }
@@ -72,65 +69,62 @@ impl Grid {
     fn remove_roll(&mut self, row: usize, col: usize) {
         self.cells[row][col] = Cell::Empty;
     }
+
+    fn iter(&self) -> impl Iterator<Item = (usize, usize, &Cell)> {
+        self.cells.iter().enumerate().flat_map(|(row, cells)| {
+            cells
+                .iter()
+                .enumerate()
+                .map(move |(col, cell)| (row, col, cell))
+        })
+    }
+
+    fn accessible_rolls(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.iter().filter_map(|(row, col, cell)| {
+            (*cell == Cell::Roll && self.can_forklift_access(row, col)).then_some((row, col))
+        })
+    }
 }
 
 impl std::fmt::Display for Grid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::new();
         for row in &self.cells {
             for cell in row {
-                match cell {
-                    Cell::Empty => output.push('.'),
-                    Cell::Roll => output.push('@'),
-                }
+                let c = match cell {
+                    Cell::Empty => '.',
+                    Cell::Roll => '@',
+                };
+                write!(f, "{c}")?;
             }
-            output.push('\n')
+            writeln!(f)?;
         }
-
-        write!(f, "{}", output)
+        Ok(())
     }
 }
 
 pub fn part_one(input: &str) -> Option<u64> {
     let grid = Grid::from_input(input);
-    let mut count: u64 = 0;
-
-    println!("{}", grid);
-
-    for i in 0..grid.cells.len() {
-        for j in 0..grid.cells[0].len() {
-            if grid.cells[i][j] == Cell::Roll && grid.can_forklift_access(i, j) {
-                count += 1;
-            }
-        }
-    }
-
+    let count = grid.accessible_rolls().count() as u64;
     Some(count)
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
     let mut grid = Grid::from_input(input);
-    let mut count: u64 = 0;
+    let mut total_count: u64 = 0;
 
     loop {
-        let mut last_removed = 0;
-
-        for i in 0..grid.cells.len() {
-            for j in 0..grid.cells[0].len() {
-                if grid.cells[i][j] == Cell::Roll && grid.can_forklift_access(i, j) {
-                    last_removed += 1;
-                    grid.remove_roll(i, j);
-                }
-            }
+        let to_remove: Vec<_> = grid.accessible_rolls().collect();
+        if to_remove.is_empty() {
+            break;
         }
 
-        count += last_removed;
-        if last_removed == 0 {
-            break;
+        total_count += to_remove.len() as u64;
+        for (row, col) in to_remove {
+            grid.remove_roll(row, col);
         }
     }
 
-    Some(count)
+    Some(total_count)
 }
 
 #[cfg(test)]
