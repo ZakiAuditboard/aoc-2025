@@ -38,13 +38,15 @@ pub fn part_two(input: &str) -> Option<usize> {
     let mut merged: Vec<RangeInclusive<u64>> = Vec::new();
 
     for range in ranges {
-        if merged.is_empty() || merged.last().unwrap().end() < range.start() {
-            merged.push(range);
+        if let Some(last) = merged.last_mut() {
+            if last.end() >= range.start() {
+                let max_end = std::cmp::max(last.end(), range.end());
+                *last = *last.start()..=*max_end;
+            } else {
+                merged.push(range);
+            }
         } else {
-            let last_merged = merged.last().unwrap();
-            let ending = std::cmp::max(last_merged.end(), range.end());
-            let len = merged.len();
-            merged[len - 1] = *last_merged.start()..=*ending;
+            merged.push(range);
         }
     }
 
