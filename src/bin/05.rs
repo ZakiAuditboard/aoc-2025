@@ -22,7 +22,7 @@ pub fn part_one(input: &str) -> Option<usize> {
     let result = ingredients_str
         .lines()
         .map(|ingredient| ingredient.parse::<u64>().unwrap())
-        .filter(|i| ranges.iter().any(|range| range.contains(&i)))
+        .filter(|i| ranges.iter().any(|range| range.contains(i)))
         .count();
 
     Some(result)
@@ -48,13 +48,8 @@ pub fn part_two(input: &str) -> Option<usize> {
         }
     }
 
-    let mut count = 0;
-
-    for range in merged {
-        count += range.end() - range.start() + 1;
-    }
-
-    Some(count as usize)
+    let res = merged.into_iter().map(|range| range.count()).sum();
+    Some(res)
 }
 
 #[cfg(test)]
