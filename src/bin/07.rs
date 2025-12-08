@@ -1,21 +1,20 @@
 advent_of_code::solution!(7);
 use std::collections::{HashMap, HashSet};
 
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, Eq)]
 enum Cell {
     Empty,
     Splitter,
     Start,
 }
 
-impl TryFrom<char> for Cell {
-    type Error = String;
-    fn try_from(value: char) -> Result<Self, Self::Error> {
+impl From<char> for Cell {
+    fn from(value: char) -> Self {
         match value {
-            '.' => Ok(Self::Empty),
-            '^' => Ok(Self::Splitter),
-            'S' => Ok(Self::Start),
-            _ => Err(String::from("Unknown character")),
+            '.' => Self::Empty,
+            '^' => Self::Splitter,
+            'S' => Self::Start,
+            _ => panic!(),
         }
     }
 }
@@ -28,14 +27,18 @@ impl Grid {
     fn from_input(input: &str) -> Self {
         let cells: Vec<Vec<Cell>> = input
             .lines()
-            .map(|line| {
-                line.chars()
-                    .map(|c| Cell::try_from(c).expect("valid cell character"))
-                    .collect()
-            })
+            .map(|line| line.chars().map(|c| Cell::from(c)).collect())
             .collect();
 
         Self { cells }
+    }
+
+    fn ncols(&self) -> usize {
+        self.cells[0].len()
+    }
+
+    fn get(&self, row: usize, col: usize) -> Option<&Cell> {
+        self.cells.get(row).and_then(|r| r.get(col))
     }
 
     fn iter(&self) -> impl Iterator<Item = (usize, usize, &Cell)> {
@@ -50,34 +53,31 @@ impl Grid {
     fn find_start(&self) -> (usize, usize) {
         let (row, col, _) = self
             .iter()
-            .find(|(_, _, cell)| **cell == Cell::Start)
+            .find(|(_, _, cell)| matches!(cell, Cell::Start))
             .unwrap();
 
         (row, col)
     }
 
-    fn go_down(&self, row: usize, col: isize, cache: &mut HashSet<(usize, usize)>) -> u64 {
-        if col < 0 || col as usize >= self.cells[0].len() || cache.contains(&(row, col as usize)) {
+    fn go_down(&self, row: usize, col: usize, cache: &mut HashSet<(usize, usize)>) -> u64 {
+        if col >= self.ncols() || !cache.insert((row, col)) {
             return 0;
         }
-
-        cache.insert((row, col as usize));
 
         let nrow = row + 1;
 
-        if nrow >= self.cells.len() {
-            return 0;
+        match self.get(nrow, col) {
+            Some(Cell::Splitter) => {
+                let left = col
+                    .checked_sub(1)
+                    .map_or(0, |c| self.go_down(nrow, c, cache));
+                let right = self.go_down(nrow, col + 1, cache);
+                1 + left + right
+            }
+            Some(Cell::Empty) => self.go_down(nrow, col, cache),
+            Some(Cell::Start) => 0,
+            None => 0,
         }
-
-        if self.cells[nrow][col as usize] == Cell::Splitter {
-            return 1 + self.go_down(nrow, col - 1, cache) + self.go_down(nrow, col + 1, cache);
-        }
-
-        if self.cells[nrow][col as usize] == Cell::Empty {
-            return self.go_down(nrow, col, cache);
-        }
-
-        0
     }
 
     // we need the cache here to memoize the paths
@@ -86,10 +86,10 @@ impl Grid {
     fn timelines_count(
         &self,
         row: usize,
-        col: isize,
-        cache: &mut HashMap<(usize, isize), u64>,
+        col: usize,
+        cache: &mut HashMap<(usize, usize), u64>,
     ) -> u64 {
-        if col < 0 || col as usize >= self.cells[0].len() {
+        if col >= self.ncols() {
             return 0;
         }
 
@@ -99,16 +99,16 @@ impl Grid {
 
         let nrow = row + 1;
 
-        if nrow >= self.cells.len() {
-            return 1;
-        }
-
-        let result = match &self.cells[nrow][col as usize] {
-            Cell::Splitter => {
-                self.timelines_count(nrow, col - 1, cache)
-                    + self.timelines_count(nrow, col + 1, cache)
+        let result = match self.get(nrow, col) {
+            Some(Cell::Splitter) => {
+                let left = col
+                    .checked_sub(1)
+                    .map_or(0, |c| self.timelines_count(nrow, c, cache));
+                let right = self.timelines_count(nrow, col + 1, cache);
+                left + right
             }
-            Cell::Empty | Cell::Start => self.timelines_count(nrow, col, cache),
+            Some(Cell::Empty | Cell::Start) => self.timelines_count(nrow, col, cache),
+            None => 1,
         };
 
         cache.insert((row, col), result);
@@ -121,14 +121,14 @@ pub fn part_one(input: &str) -> Option<u64> {
     let grid = Grid::from_input(input);
     let (row, col) = grid.find_start();
 
-    Some(grid.go_down(row, col as isize, &mut HashSet::new()))
+    Some(grid.go_down(row, col, &mut HashSet::new()))
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
     let grid = Grid::from_input(input);
     let (row, col) = grid.find_start();
 
-    Some(grid.timelines_count(row, col as isize, &mut HashMap::new()))
+    Some(grid.timelines_count(row, col, &mut HashMap::new()))
 }
 
 #[cfg(test)]
