@@ -38,7 +38,7 @@ impl UnionFind {
         }
     }
 
-    fn component_sizes(&mut self) -> Vec<usize> {
+    fn circuit_sizes(&mut self) -> Vec<usize> {
         let mut roots = HashSet::new();
 
         for i in 0..self.parent.len() {
@@ -99,7 +99,7 @@ pub fn part_one(input: &str) -> Option<u64> {
         union_find.union(i, j);
     }
 
-    let mut sizes = union_find.component_sizes();
+    let mut sizes = union_find.circuit_sizes();
     sizes.sort_unstable();
 
     Some(sizes.iter().rev().take(3).map(|&s| s as u64).product())
@@ -125,7 +125,7 @@ pub fn part_two(input: &str) -> Option<u64> {
         if union_find.find(i) != union_find.find(j) {
             union_find.union(i, j);
 
-            if union_find.component_sizes().len() == 1 {
+            if union_find.circuit_sizes().len() == 1 {
                 return Some(boxes[i].x * boxes[j].x);
             }
         }
